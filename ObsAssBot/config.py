@@ -1,4 +1,4 @@
-TOKEN = 'xxxxxx'
+TOKEN = 'xxxxxxxxx'
 
 # Файл config.py
 

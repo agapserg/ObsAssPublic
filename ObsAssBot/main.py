@@ -540,7 +540,7 @@ async def process_delete(message: types.Message, state: FSMContext):
         await message.answer("Пожалуйста, введите корректный номер строки.")
         return
 
-    conn = sqlite3.connect('trigger_words.db')
+    conn = sqlite3.connect(BD_PATH + 'trigger_words.db')
     cursor = conn.cursor()
     
     # Проверка наличия строки с данным id в базе данных
@@ -575,7 +575,7 @@ async def add_trigger_word(message: types.Message):
     await message.answer("Пожалуйста, укажите триггерное слово.")
 
 def get_unique_paths_from_db():
-    conn = sqlite3.connect('trigger_words.db')
+    conn = sqlite3.connect(BD_PATH + 'trigger_words.db')
     cursor = conn.cursor()
     cursor.execute("SELECT DISTINCT inbox_path FROM triggers")
     paths = [row[0] for row in cursor.fetchall()]
@@ -628,7 +628,7 @@ async def process_filename(message: types.Message, state: FSMContext):
         filename = message.text
     
     # Сохранение данных в базу данных
-    conn = sqlite3.connect('trigger_words.db')
+    conn = sqlite3.connect(BD_PATH + 'trigger_words.db')
     cursor = conn.cursor()
 
     # Проверка существования таблицы triggers и её создание, если она не найдена
@@ -650,7 +650,7 @@ async def process_filename(message: types.Message, state: FSMContext):
 @dp.message_handler(Command('help'))
 async def send_triggers(message: types.Message):
     # Соединение с базой данных и выбор данных
-    conn = sqlite3.connect('trigger_words.db')
+    conn = sqlite3.connect(BD_PATH + 'trigger_words.db')
     cursor = conn.cursor()
     # Измененный запрос для выбора id, trigger_word и filename
     cursor.execute("SELECT id, trigger_word, filename FROM triggers")
@@ -954,7 +954,7 @@ def generate_short_code(file_name, max_length=10):
 
 @dp.message_handler(lambda message: message.text and message.text.split()[0].lower() in get_triggers())
 async def handle_message(message: types.Message):
-    conn = sqlite3.connect('trigger_words.db')
+    conn = sqlite3.connect(BD_PATH + 'trigger_words.db')
     cursor = conn.cursor()
     first_word = message.text.split()[0]
     if re.match(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', first_word):
@@ -975,7 +975,7 @@ async def handle_message(message: types.Message):
 async def handle_non_trigger_message(message: types.Message):
     # Так как ключевого слова нет, считаем, что оно "инбокс"
     trigger_word = "инбокс"
-    conn = sqlite3.connect('trigger_words.db')
+    conn = sqlite3.connect(BD_PATH + 'trigger_words.db')
     cursor = conn.cursor()
     # Обновляем запрос к базе данных, чтобы извлечь только нужные поля
     cursor.execute("SELECT trigger_word, filename FROM triggers WHERE trigger_word = ?", (trigger_word,))
@@ -990,7 +990,7 @@ async def handle_non_trigger_message(message: types.Message):
 async def handle_non_trigger_message_shorts(message: types.Message):
     # Так как ключевого слова нет, считаем, что оно "шортс"
     trigger_word = "шортс"
-    conn = sqlite3.connect('trigger_words.db')
+    conn = sqlite3.connect(BD_PATH + 'trigger_words.db')
     cursor = conn.cursor()
     # Обновляем запрос к базе данных, чтобы извлечь только нужные поля
     cursor.execute("SELECT trigger_word, filename FROM triggers WHERE trigger_word = ?", (trigger_word,))
@@ -1003,7 +1003,7 @@ async def handle_non_trigger_message_shorts(message: types.Message):
 
 def get_triggers():
     # Получение всех триггерных слов из базы данных
-    conn = sqlite3.connect('trigger_words.db')
+    conn = sqlite3.connect(BD_PATH + 'trigger_words.db')
     cursor = conn.cursor()
 
     cursor.execute("SELECT trigger_word FROM triggers")
