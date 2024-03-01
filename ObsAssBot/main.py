@@ -40,7 +40,7 @@ from yt_dlp import YoutubeDL
 import asyncio
 import glob
 
-from config import TOKEN, ROOT_PATH, READ_LATER_PATH, BOOK_PATH, WAKE_UP_PATH, SLEEP_PATH, VIDEO_PATH, PHOTO_PATH
+from config import TOKEN, ROOT_PATH, READ_LATER_PATH, BOOK_PATH, WAKE_UP_PATH, SLEEP_PATH, VIDEO_PATH, PHOTO_PATH, BD_PATH
 
 # Глобальные переменные
 global last_photo_time, last_photo_index
@@ -87,7 +87,7 @@ async def send_birthday(user_id, days):
 
 async def send_random_shorts(user_id):
     directory = ROOT_PATH
-    db_path = "shorts.db"  # Новое название файла БД
+    db_path = BD_PATH + "shorts.db"  # Новое название файла БД
 
     with closing(sqlite3.connect(db_path)) as connection:
         with closing(connection.cursor()) as cursor:
@@ -142,7 +142,7 @@ async def send_random_shorts(user_id):
 
 async def send_random_rss(user_id):
     file_path = READ_LATER_PATH
-    db_path = "RSS.db"  # Новое название файла БД
+    db_path = BD_PATH + "RSS.db"  # Новое название файла БД
 
     # Создаем или открываем БД и таблицу
     with closing(sqlite3.connect(db_path)) as connection:
@@ -199,7 +199,7 @@ async def send_random_rss(user_id):
 
 async def send_random_minds(user_id):
     directory = ROOT_PATH
-    db_path = "Minds.db"  # Обновленное название файла БД
+    db_path = BD_PATH + "Minds.db"  # Обновленное название файла БД
 
     # Создаем или открываем БД и таблицу
     with closing(sqlite3.connect(db_path)) as connection:
@@ -257,7 +257,7 @@ async def send_random_minds(user_id):
 
 async def send_random_quote(user_id):
     directory = BOOK_PATH
-    db_path = "quotes_database.db"  # Путь к файлу БД
+    db_path = BD_PATH + "quotes_database.db"  # Путь к файлу БД
 
     # Создаем или открываем БД и таблицу
     with closing(sqlite3.connect(db_path)) as connection:

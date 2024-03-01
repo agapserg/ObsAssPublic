@@ -1,2 +1,4 @@
 ObsAssBot/config.py
 *.db
+ObsAssBot/__pycache__/
+database/.obsidian/
