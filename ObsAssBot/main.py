@@ -855,16 +855,23 @@ async def process_message(message: types.Message):
             button = InlineKeyboardButton(short_name, callback_data='save_to_file:' + short_code)
             markup.add(button)
         await message.reply("Выберите файл для сохранения:", reply_markup=markup)
-    elif message.text and ("youtube.com/shorts/" in message.text or "youtu.be/" in message.text): # Логика обработки шортсов
-        # Сохраняем шортс с ключевым словом "шортс"
-        filename = await save_shorts(message, "шортс", bot)
-        # Формируем текст, который будет отправлен в заметку, включая исходную ссылку и название файла
+    elif message.text and ("youtube.com/shorts/" in message.text or "youtu.be/" in message.text):
+        # Разделяем текст сообщения на слова
+        words = message.text.split()
+        # Если сообщение содержит только ссылку, считаем, что триггерное слово "шортс"
+        if len(words) == 1 or (len(words) == 2 and words[0].lower() == "https:"):
+            trigger_word = "шортс"
+        else:
+            # Если перед ссылкой есть другие слова, первое слово считается триггерным
+            trigger_word = words[0]
+        # Процесс сохранения шортса с выбранным триггерным словом и последующие действия...
+        filename = await save_shorts(message, trigger_word, bot)
         current_time = dt.now().strftime("%Y-%m-%d")
         message_text_with_filename = f"[[{filename}]] - {message.text}?feature=share"
-        # Создаём фейковое сообщение для последующей обработки
         message_timestamp = int(message.date.timestamp())
         fake_message = types.Message(message_id=message.message_id, chat=message.chat, date=message_timestamp, text=message_text_with_filename)
-        await handle_non_trigger_message_shorts(fake_message)  # Изменено на прямой вызов функции для не-триггерных сообщений
+        fake_message.trigger_word = trigger_word  # Добавляем trigger_word к объекту сообщения
+        await handle_non_trigger_message_shorts(fake_message)  # Теперь fake_message содержит trigger_word
     elif message.text:
         # Проверяем, начинается ли текст сообщения с триггера
         if message.text.split()[0].lower() in get_triggers():
@@ -902,7 +909,7 @@ async def process_message(message: types.Message):
 # Функция для сохранения фото
 async def save_photo(message: types.Message, file_name_suffix, bot):
     global last_photo_time, last_photo_index
-    photo_path = PHOTO_PATH
+    photo_path = 'C:\\Soft\\Obsidian\\ObsDataBase\\Attachments\\obsass\\photo'  # Пример пути
     current_time = dt.now()
     if last_photo_time and current_time.strftime("%Y-%m-%d %H-%M-%S") == last_photo_time.strftime("%Y-%m-%d %H-%M-%S"):
         last_photo_index += 1
@@ -913,10 +920,13 @@ async def save_photo(message: types.Message, file_name_suffix, bot):
     photo_id = message.photo[-1].file_id
     file_path = await bot.get_file(photo_id)
     file = await bot.download_file(file_path.file_path)
+    
+    # Создание папки, если она не существует
+    os.makedirs(photo_path, exist_ok=True)
+    
     with open(os.path.join(photo_path, filename), 'wb') as photo_file:
         photo_file.write(file.getvalue())
     return filename
-
 
 @dp.callback_query_handler(lambda c: c.data and c.data.startswith('save_to_file:'))
 async def handle_file_selection(callback_query: types.CallbackQuery):
@@ -988,8 +998,7 @@ async def handle_non_trigger_message(message: types.Message):
 
 @dp.message_handler(lambda message: not message.text.split()[0].lower() in get_triggers())
 async def handle_non_trigger_message_shorts(message: types.Message):
-    # Так как ключевого слова нет, считаем, что оно "шортс"
-    trigger_word = "шортс"
+    trigger_word = getattr(message, 'trigger_word', 'шортс')  # Используем значение по умолчанию, если trigger_word отсутствует
     conn = sqlite3.connect(BD_PATH + 'trigger_words.db')
     cursor = conn.cursor()
     # Обновляем запрос к базе данных, чтобы извлечь только нужные поля
