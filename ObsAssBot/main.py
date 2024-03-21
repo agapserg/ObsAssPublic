@@ -771,6 +771,9 @@ async def add_note(message: types.Message, filename, is_trigger_word=True):
             elif "333" in note_content:
                 note_text = note_text.replace('🟩', '🟥')
             
+            for keyword in ["ггг", "ссс", "ххх", "ХХХ", "222", "333", "ззз", "ппзз", "ввчч", "ппп", "линкс", "сспп"]:
+                note_text = note_text.replace(keyword, "")
+
             # Убираем ключевые слова из note_text
             search_pattern = os.path.join(ROOT_PATH, '**', f"{filename}.md")
             files_found = [file for file in glob.glob(search_pattern, recursive=True) if os.path.basename(file) == f"{filename}.md"]
