@@ -714,11 +714,14 @@ async def add_note(message: types.Message, filename, is_trigger_word=True):
                 note_text = f'\n- [ ] 🟩 {note_content} ➕ {curr_date} '
             
             if "ммм" in note_content:
-                note_text = note_text.replace("🟩", "#мысль 🟩")
+                note_text = note_text.replace("- [ ] 🟩", "- [I]")
+                note_content = note_content.replace("ммм", "")
+            if "иии" in note_content:
+                note_text = note_text.replace("- [ ] 🟩", "- [I]")
                 note_content = note_content.replace("ммм", "")
             # Добавление эмодзи в начало по ключевым словам
             emoji_dict = {
-                "купить": "💰",
+                "купить": "- [b]",
                 "аптека": "💊",
                 "ачивка": "🏆",
                 "линкс": "🔗",
@@ -727,7 +730,7 @@ async def add_note(message: types.Message, filename, is_trigger_word=True):
             }
             for word, emoji in emoji_dict.items():
                 if word in note_content:
-                    note_text = note_text.replace("🟩", f"🟩{emoji}")
+                    note_text = note_text.replace("- [ ] 🟩", f"{emoji}")
             
             # Проверка наличия "линкс"
             if "линкс" in note_content:
@@ -771,7 +774,7 @@ async def add_note(message: types.Message, filename, is_trigger_word=True):
             elif "333" in note_content:
                 note_text = note_text.replace('🟩', '🟥')
             
-            for keyword in ["ггг", "ссс", "ххх", "ХХХ", "222", "333", "ззз", "ппзз", "ввчч", "ппп", "линкс", "сспп"]:
+            for keyword in ["ггг", "ссс", "ххх", "ХХХ", "222", "333", "ззз", "ппзз", "ввчч", "ппп", "линкс", "сспп","ммм","иии"]:
                 note_text = note_text.replace(keyword, "")
 
             # Убираем ключевые слова из note_text
