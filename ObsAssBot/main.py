@@ -1043,7 +1043,7 @@ if __name__ == "__main__":
     days = 30
     scheduler.add_job(send_random_quote, 'cron', day='*', hour=4, minute=0, args=[user_id_to_send], misfire_grace_time=300)  # 300 секунд грации  # Например, каждый день в 00:01
     scheduler.add_job(send_random_minds, 'cron', day='*', hour=4, minute=2, args=[user_id_to_send], misfire_grace_time=300)
-    scheduler.add_job(send_random_rss, 'cron', day='*', hour=4, minute=4, args=[user_id_to_send], misfire_grace_time=300)
+    # scheduler.add_job(send_random_rss, 'cron', day='*', hour=4, minute=4, args=[user_id_to_send], misfire_grace_time=300)
     scheduler.add_job(send_random_shorts, 'cron', day='*', hour=4, minute=6, args=[user_id_to_send], misfire_grace_time=300)
     scheduler.add_job(send_birthday, 'cron', day_of_week='mon', hour=4, minute=8, args=[user_id_to_send, days], misfire_grace_time=300)
     scheduler.start()
