@@ -562,11 +562,60 @@ async def process_delete(message: types.Message, state: FSMContext):
     
     await state.finish()  # Завершение работы с состоянием
 
+class TaskForm(StatesGroup):
+    task_name = State()
+    task_status = State()
 
+class TaskForm(StatesGroup):
+    task_name = State()
+    task_status = State()
+
+def get_tasks_keyboard():
+    tasks = ['send_random_quote', 'send_random_minds', 'send_random_shorts', 'send_birthday', 'send_random_rss']
+    keyboard = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    for task in tasks:
+        keyboard.add(KeyboardButton(task))
+    return keyboard
+
+@dp.message_handler(Command('activate_task'))
+async def activate_task(message: types.Message):
+    await TaskForm.task_name.set()
+    keyboard = get_tasks_keyboard()
+    await message.answer("Введите название задачи для активации:", reply_markup=keyboard)
+
+@dp.message_handler(state=TaskForm.task_name)
+async def process_task_name(message: types.Message, state: FSMContext):
+    async with state.proxy() as data:
+        data['task_name'] = message.text
+
+    await TaskForm.task_status.set()
+    keyboard = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True).add(
+        KeyboardButton("1"),
+        KeyboardButton("0")
+    )
+    await message.answer("Введите 1 для активации или 0 для деактивации:", reply_markup=keyboard)
+
+@dp.message_handler(state=TaskForm.task_status)
+async def process_task_status(message: types.Message, state: FSMContext):
+    async with state.proxy() as data:
+        task_name = data['task_name']
+        try:
+            task_status = int(message.text)
+        except ValueError:
+            await message.answer("Введите 1 для активации или 0 для деактивации:")
+            return
+
+    conn = sqlite3.connect('tasks_settings.db')
+    cursor = conn.cursor()
+    cursor.execute("UPDATE tasks SET enabled = ? WHERE name = ?", (task_status, task_name))
+    conn.commit()
+    conn.close()
+
+    await state.finish()
+    await message.answer(f"Задача {task_name} обновлена до статуса {'активирована' if task_status == 1 else 'деактивирована'}")
 # Создание стейтов (состояний) для нашего бота
 class Form(StatesGroup):
     trigger_word = State()  # Введение триггерного слова
-    inbox_path = State()  # Выбор пути до файла
     filename = State()  # Введение имени файла
 
 @dp.message_handler(Command('add'))
@@ -574,48 +623,10 @@ async def add_trigger_word(message: types.Message):
     await Form.trigger_word.set()
     await message.answer("Пожалуйста, укажите триггерное слово.")
 
-def get_unique_paths_from_db():
-    conn = sqlite3.connect(BD_PATH + 'trigger_words.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT DISTINCT inbox_path FROM triggers")
-    paths = [row[0] for row in cursor.fetchall()]
-    return paths
-
 @dp.message_handler(state=Form.trigger_word)
 async def process_trigger_word(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['trigger_word'] = message.text.lower()
-
-    unique_paths = "123"
-    
-    if unique_paths:
-        markup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-        
-        # Получаем только конечные части путей для отображения на кнопках
-        display_paths = [path.replace(BASE_PATH, '') for path in unique_paths]
-        # Сортируем конечные части путей
-        display_paths = sorted(display_paths)
-
-        for display_path in display_paths:
-            markup.add(KeyboardButton(text=display_path))
-        
-        await message.answer("Выберите путь до файла или напишите новый.", reply_markup=markup)
-        await Form.inbox_path.set()  # Переход к состоянию ожидания пути
-    else:
-        await message.answer("В базе данных нет сохраненных путей. Напишите путь.")
-        await Form.inbox_path.set()  # Переход к состоянию ожидания пути
-
-
-# Не забывайте проверить ввод пользователя на следующем этапе:
-@dp.message_handler(state=Form.inbox_path)
-async def process_inbox_path(message: types.Message, state: FSMContext):
-    async with state.proxy() as data:
-        # Если введенный путь не полный, добавляем базовый путь к началу
-        if BASE_PATH not in message.text:
-            full_path = BASE_PATH + message.text
-        else:
-            full_path = message.text
-        data['inbox_path'] = full_path
 
     await message.answer("Укажите название файла")
     await Form.filename.set()  # Переход к состоянию ожидания имени файла
@@ -624,9 +635,8 @@ async def process_inbox_path(message: types.Message, state: FSMContext):
 async def process_filename(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         trigger_word = data['trigger_word']
-        inbox_path = data['inbox_path']
         filename = message.text
-    
+
     # Сохранение данных в базу данных
     conn = sqlite3.connect(BD_PATH + 'trigger_words.db')
     cursor = conn.cursor()
@@ -638,14 +648,17 @@ async def process_filename(message: types.Message, state: FSMContext):
                         inbox_path TEXT NOT NULL,
                         filename TEXT NOT NULL
                       )""")
-    
+
+    # Добавление записи с inbox_path, установленным в 1
     cursor.execute("INSERT INTO triggers (trigger_word, inbox_path, filename) VALUES (?, ?, ?)",
-                   (trigger_word, inbox_path, filename))
+                   (trigger_word, '1', filename))
     conn.commit()
     conn.close()
 
     await state.finish()
-    await message.answer(f"Новая связка добавлена: {trigger_word}, {inbox_path}, {filename}")
+    await message.answer(f"Новая связка добавлена: {trigger_word}, {filename}")
+
+
 
 @dp.message_handler(Command('help'))
 async def send_triggers(message: types.Message):
@@ -1040,14 +1053,32 @@ async def debug_state(message: types.Message, state: FSMContext):
 
 
 if __name__ == "__main__":
-    from aiogram import executor
     scheduler = AsyncIOScheduler()
+
+    def load_tasks():
+        conn = sqlite3.connect('tasks_settings.db')
+        cursor = conn.cursor()
+        cursor.execute("SELECT name, enabled FROM tasks")
+        tasks = cursor.fetchall()
+        conn.close()
+        return tasks
+
     user_id_to_send = 5922128322
     days = 30
-    scheduler.add_job(send_random_quote, 'cron', day='*', hour=4, minute=0, args=[user_id_to_send], misfire_grace_time=300)  # 300 секунд грации  # Например, каждый день в 00:01
-    scheduler.add_job(send_random_minds, 'cron', day='*', hour=4, minute=2, args=[user_id_to_send], misfire_grace_time=300)
-    # scheduler.add_job(send_random_rss, 'cron', day='*', hour=4, minute=4, args=[user_id_to_send], misfire_grace_time=300)
-    scheduler.add_job(send_random_shorts, 'cron', day='*', hour=4, minute=6, args=[user_id_to_send], misfire_grace_time=300)
-    scheduler.add_job(send_birthday, 'cron', day_of_week='mon', hour=4, minute=8, args=[user_id_to_send, days], misfire_grace_time=300)
+    tasks = load_tasks()
+    
+    for task, enabled in tasks:
+        if enabled:
+            if task == 'send_random_quote':
+                scheduler.add_job(send_random_quote, 'cron', day='*', hour=4, minute=0, args=[user_id_to_send], misfire_grace_time=300)
+            elif task == 'send_random_minds':
+                scheduler.add_job(send_random_minds, 'cron', day='*', hour=4, minute=2, args=[user_id_to_send], misfire_grace_time=300)
+            elif task == 'send_random_shorts':
+                scheduler.add_job(send_random_shorts, 'cron', day='*', hour=4, minute=6, args=[user_id_to_send], misfire_grace_time=300)
+            elif task == 'send_birthday':
+                scheduler.add_job(send_birthday, 'cron', day_of_week='mon', hour=4, minute=8, args=[user_id_to_send, days], misfire_grace_time=300)
+            elif task == 'send_random_rss':
+                scheduler.add_job(send_random_rss, 'cron', day='*', hour=4, minute=4, args=[user_id_to_send], misfire_grace_time=300)
+    
     scheduler.start()
     executor.start_polling(dp, skip_updates=True)
