@@ -56,6 +56,53 @@ dp.middleware.setup(LoggingMiddleware())
 BASE_PATH = ROOT_PATH
 directory = BOOK_PATH
 
+
+def find_comix_file(root_path):
+    for dirpath, dirnames, filenames in os.walk(root_path):
+        if "комиксы и картинки.md" in filenames:
+            return os.path.join(dirpath, "комиксы и картинки.md")
+    return None
+
+@dp.message_handler(commands=['comix'])
+async def send_random_comix(message: types.Message):
+    # Шаг 2: Найти файл "комиксы и картинки.md"
+    comix_file_path = find_comix_file(ROOT_PATH)
+    if not comix_file_path:
+        await message.answer("Файл 'комиксы и картинки.md' не найден.")
+        return
+    
+    # Шаг 3: Прочитать содержимое файла и найти все названия файлов в [[]]
+    with open(comix_file_path, 'r', encoding='utf-8') as file:
+        content = file.read()
+
+    file_names = re.findall(r'\[\[(.*?)\]\]', content)
+
+    # Шаг 4: Очистить названия файлов от [[]] и создать список
+    cleaned_file_names = [name.strip() for name in file_names]
+
+    # Шаг 5: Выбрать случайное название файла из списка
+    if not cleaned_file_names:
+        await message.answer("В файле 'комиксы и картинки.md' нет названий файлов.")
+        return
+
+    random_file_name = random.choice(cleaned_file_names)
+
+    # Шаг 6: Найти файл с выбранным названием в ROOT_PATH
+    def find_file(root_path, file_name):
+        for dirpath, dirnames, filenames in os.walk(root_path):
+            if file_name in filenames:
+                return os.path.join(dirpath, file_name)
+        return None
+
+    random_file_path = find_file(ROOT_PATH, random_file_name)
+    if not random_file_path:
+        await message.answer(f"Файл '{random_file_name}' не найден.")
+        return
+
+    # Шаг 7: Отправить файл пользователю
+    with open(random_file_path, 'rb') as photo:
+        await message.answer_photo(photo)
+
 async def send_birthday(user_id, days):
     directory = ROOT_PATH
     birthday_pattern = r'- \[ \] 🟩🎂 (.+) ⏫ 🔁 every year ➕ \d{4}-\d{2}-\d{2} 📅 (\d{4}-\d{2}-\d{2})'
