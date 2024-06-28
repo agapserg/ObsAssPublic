@@ -847,7 +847,25 @@ async def add_note(message: types.Message, filename, is_trigger_word=True):
                     f.write(note_text)
                 await message.answer("Заметка добавлена!")
             else:
-                await message.answer("Файл не найден. Пожалуйста, проверьте название файла!")
+                trigger_word = "инбокс"
+                conn = sqlite3.connect(BD_PATH + 'trigger_words.db')
+                cursor = conn.cursor()
+                cursor.execute("SELECT filename FROM triggers WHERE trigger_word = ?", (trigger_word,))
+                fetch_result = cursor.fetchone()
+                conn.close()
+                if fetch_result:
+                    inbox_filename = fetch_result[0]
+                    search_pattern = os.path.join(ROOT_PATH, '**', f"{inbox_filename}.md")
+                    files_found = [file for file in glob.glob(search_pattern, recursive=True) if os.path.basename(file) == f"{inbox_filename}.md"]
+                    if files_found:
+                        inbox_path = files_found[0]  # Используем первый найденный файл
+                        with open(inbox_path, 'a', encoding='UTF-8') as f:
+                            f.write(note_text)
+                        await message.answer(f"Файл не найден. Заметка сохранена в '{inbox_filename}'.")
+                    else:
+                        await message.answer("Файл не найден. Пожалуйста, проверьте название файла!")
+                else:
+                    await message.answer("Файл не найден. Пожалуйста, проверьте название файла!")
 
 
 def clean_filename(filename):
