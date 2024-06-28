@@ -845,7 +845,7 @@ async def add_note(message: types.Message, filename, is_trigger_word=True):
                 DIRNAME = files_found[0]  # Используем первый найденный файл, соответствующий критериям
                 with open(DIRNAME, 'a', encoding='UTF-8') as f:
                     f.write(note_text)
-                await message.answer("Заметка добавлена!")
+                await message.answer(f"Заметка добавлена! В файл {filename}.")
             else:
                 trigger_word = "инбокс"
                 conn = sqlite3.connect(BD_PATH + 'trigger_words.db')
