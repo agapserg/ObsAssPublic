@@ -104,8 +104,17 @@ async def add_aliases_to_db(aliases, filename):
                      )""")
 
     for alias in aliases:
-        cursor.execute("INSERT INTO triggers (trigger_word, inbox_path, filename) VALUES (?, ?, ?)",
-                       (alias.lower(), '1', filename))
+        alias_lower = alias.lower()
+        
+        # Проверка, существует ли уже такая запись в базе данных
+        cursor.execute("SELECT 1 FROM triggers WHERE trigger_word = ? AND filename = ?", (alias_lower, filename))
+        result = cursor.fetchone()
+        
+        # Если запись не найдена, добавляем её
+        if not result:
+            cursor.execute("INSERT INTO triggers (trigger_word, inbox_path, filename) VALUES (?, ?, ?)",
+                        (alias_lower, '1', filename))
+
 
     conn.commit()
 
