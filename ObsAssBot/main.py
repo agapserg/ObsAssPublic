@@ -39,6 +39,8 @@ from contextlib import closing
 from yt_dlp import YoutubeDL
 import asyncio
 import glob
+from yt_dlp.utils import DownloadError
+
 
 from config import TOKEN, ROOT_PATH, READ_LATER_PATH, BOOK_PATH, WAKE_UP_PATH, SLEEP_PATH, VIDEO_PATH, PHOTO_PATH, BD_PATH
 
@@ -55,6 +57,66 @@ dp = Dispatcher(bot, storage=storage)
 dp.middleware.setup(LoggingMiddleware())
 BASE_PATH = ROOT_PATH
 directory = BOOK_PATH
+
+
+async def scan_and_add_to_db():
+    """
+    Функция для сканирования всех .md файлов в ROOT_PATH и вложенных папках,
+    извлечения алиасов и добавления их в базу данных.
+    """
+    for root, dirs, files in os.walk(ROOT_PATH):
+        for file in files:
+            if file.endswith('.md'):
+                file_path = os.path.join(root, file)
+                await process_md_file(file_path)
+
+async def process_md_file(file_path):
+    """
+    Обрабатывает отдельный .md файл, извлекая из него алиасы и добавляя их в базу данных.
+    """
+    with open(file_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+        # Ищем блок с aliases
+        match = re.search(r'---\s*.*?aliases:\s*\[?\s*(.*?)\s*\]?\s*---', content, re.DOTALL)
+        if match:
+            aliases_block = match.group(1)
+            # Извлекаем слова из блока aliases
+            aliases = re.findall(r'-\s*(.*)', aliases_block)
+
+            if aliases:
+                filename = os.path.splitext(os.path.basename(file_path))[0]
+                await add_aliases_to_db(aliases, filename)
+
+async def add_aliases_to_db(aliases, filename):
+    """
+    Добавляет алиасы и название файла в базу данных.
+    """
+    conn = sqlite3.connect(BD_PATH + 'trigger_words.db')
+    cursor = conn.cursor()
+
+    # Проверка существования таблицы triggers и её создание, если она не найдена
+    cursor.execute("""CREATE TABLE IF NOT EXISTS triggers (
+                        id INTEGER PRIMARY KEY,
+                        trigger_word TEXT NOT NULL,
+                        inbox_path TEXT NOT NULL,
+                        filename TEXT NOT NULL
+                     )""")
+
+    for alias in aliases:
+        cursor.execute("INSERT INTO triggers (trigger_word, inbox_path, filename) VALUES (?, ?, ?)",
+                       (alias.lower(), '1', filename))
+
+    conn.commit()
+
+# Хендлер для команды /refresh
+@dp.message_handler(Command('refresh'))
+async def refresh_database(message: types.Message):
+    """
+    Хендлер для команды /refresh, который запускает сканирование и добавление алиасов в базу данных.
+    """
+    await scan_and_add_to_db()
+    await message.answer("Сканирование завершено и данные обновлены.")
 
 
 def find_comix_file(root_path):
@@ -717,7 +779,6 @@ async def send_triggers(message: types.Message):
     triggers = cursor.fetchall()
     # Измененное форматирование данных для вывода, чтобы включить id
     triggers_str_list = [f"{id}. {trigger} = {filename}" for id, trigger, filename in triggers]
-    triggers_str = "\n".join(triggers_str_list)
 
     # Дополнительный текст с описанием новых триггеров
     additional_text = (
@@ -731,20 +792,30 @@ async def send_triggers(message: types.Message):
         "222 - жёлтая задача\n"
         "333 - красная задача\n"
         "ммм - добавляет тег мысль в задачу\n"
-        "купить - добавляет эмодзю 💰\n"
-        "аптека - добавляет эмодзю 💊\n"
-        "ачивка - добавляет эмодзю 🏆\n"
-        "линкс - добавляет эмодзю 🔗\n"
-        "ппп - помощник - добавляет эмодзю 👩‍💼\n"
-        "др - добавляет эмодзю 🎂\n"
+        "купить - добавляет эмодзи 💰\n"
+        "аптека - добавляет эмодзи 💊\n"
+        "ачивка - добавляет эмодзи 🏆\n"
+        "линкс - добавляет эмодзи 🔗\n"
+        "ппп - помощник - добавляет эмодзи 👩‍💼\n"
+        "др - добавляет эмодзи 🎂\n"
     )
 
-    # Объединение и отправка данных пользователю
+    # Объединение текстов и триггеров
+    triggers_str = "\n".join(triggers_str_list)
     full_message = additional_text + "\n\nHere are the available triggers:\n" + triggers_str
-    if triggers_str:
-        await message.answer(full_message)
+
+    # Максимальный размер одного сообщения
+    MAX_MESSAGE_LENGTH = 4096
+
+    # Если сообщение превышает лимит, разбиваем его на части
+    if len(full_message) > MAX_MESSAGE_LENGTH:
+        # Разбиваем сообщение по частям
+        parts = [full_message[i:i + MAX_MESSAGE_LENGTH] for i in range(0, len(full_message), MAX_MESSAGE_LENGTH)]
+        for part in parts:
+            await message.answer(part)
     else:
-        await message.answer("No triggers found in the database.")
+        await message.answer(full_message)
+
 
 
 async def add_note(message: types.Message, filename, is_trigger_word=True):
@@ -779,6 +850,7 @@ async def add_note(message: types.Message, filename, is_trigger_word=True):
             if "иии" in note_content:
                 note_text = note_text.replace("- [ ] 🟩", "- [I]")
                 note_content = note_content.replace("ммм", "")
+            
             # Добавление эмодзи в начало по ключевым словам
             emoji_dict = {
                 "купить": "- [b]",
@@ -786,7 +858,7 @@ async def add_note(message: types.Message, filename, is_trigger_word=True):
                 "ачивка": "🏆",
                 "линкс": "🔗",
                 "ппп": "👩‍💼",
-                " др ": "🎂"
+                " др ": "- [ ] 🟩🎂"
             }
             for word, emoji in emoji_dict.items():
                 if word in note_content:
@@ -804,6 +876,11 @@ async def add_note(message: types.Message, filename, is_trigger_word=True):
                 curr_date = (dt.now() + timedelta(days=1)).strftime('%Y-%m-%d')
                 note_content = note_content.replace("ззз", "")
                 note_text += f'📅 {curr_date} '
+
+            if "ннн" in note_content:
+                            curr_date = (dt.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+                            note_content = note_content.replace("ннн", "")
+                            note_text += f'⏳ {curr_date} '
 
             if "сспп" in note_content:
                 # Найти ближайший понедельник
@@ -834,7 +911,7 @@ async def add_note(message: types.Message, filename, is_trigger_word=True):
             elif "333" in note_content:
                 note_text = note_text.replace('🟩', '🟥')
             
-            for keyword in ["ггг", "ссс", "ххх", "ХХХ", "222", "333", "ззз", "ппзз", "ввчч", "ппп", "линкс", "сспп","ммм","иии"]:
+            for keyword in ["ггг", "ссс", "ххх", "ХХХ", "222", "333", "ззз", "ппзз", "ввчч", "ппп", "линкс", "сспп","ммм","иии","ннн"]:
                 note_text = note_text.replace(keyword, "")
 
             # Убираем ключевые слова из note_text
@@ -885,7 +962,7 @@ def clean_filename(filename):
 async def download_youtube_video(url, path_to_save):
     def _download():
         ydl_opts = {
-            'format': 'best',
+            'format': '137+140',  # Загрузить первый доступный формат
             'outtmpl': path_to_save,
             'postprocessors': [{
                 'key': 'FFmpegVideoConvertor',
@@ -1144,6 +1221,8 @@ if __name__ == "__main__":
                 scheduler.add_job(send_birthday, 'cron', day_of_week='mon', hour=4, minute=8, args=[user_id_to_send, days], misfire_grace_time=300)
             elif task == 'send_random_rss':
                 scheduler.add_job(send_random_rss, 'cron', day='*', hour=4, minute=4, args=[user_id_to_send], misfire_grace_time=300)
+            elif task == 'scan_and_add_to_db':
+                scheduler.add_job(scan_and_add_to_db, 'interval', minutes=10, misfire_grace_time=300)
     
     scheduler.start()
     executor.start_polling(dp, skip_updates=True)
